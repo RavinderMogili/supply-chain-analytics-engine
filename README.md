@@ -2,7 +2,7 @@
 
 ![CI](https://github.com/RavinderMogili/supply-chain-analytics-engine/actions/workflows/build.yml/badge.svg)
 
-A focused C++ library demonstrating high-performance, testable supply chain
+A focused C++23 library demonstrating high-performance, testable supply chain
 planning algorithms — designed to showcase algorithm development skills
 relevant to supply chain software roles.
 
@@ -40,7 +40,17 @@ supply chain systems:
 - **LRU cache + parallel batch planner** — thread-safe result cache with
   `std::async` batch processing; simulates the caching + request-batching
   pattern used to address cloud round-trip overhead in large planning systems
-- **std::variant pipeline** — typed result/error propagation without exceptions
+- **`std::expected` pipeline (C++23)** — typed result/error propagation without
+  exceptions or null checks — `PlannerPipeline` returns either a
+  `PlanningResult` or an error string, checked via `.has_value()`
+- **Digital twin simulation** — day-by-day forward inventory simulation over a
+  configurable horizon, modelling reorder triggers and supplier lead times
+- **Disruption analyzer** — what-if scenario modelling: applies a supplier delay
+  and shows which items escalate in risk before/after
+- **Parallel scenario runner** — evaluates multiple disruption scenarios
+  concurrently via `std::async`; thread-safe through immutable inputs
+- **Signal-aware forecasting** — Decorator pattern wrapping any `IForecaster`
+  with additive/multiplicative real-time demand signals
 - **JSON report export** — machine-readable output with no external dependencies
 
 ---
@@ -55,7 +65,9 @@ supply-chain-analytics-engine/
 │   │   ├── IForecaster.h          # Strategy interface
 │   │   ├── SMAForecaster.h        # Simple Moving Average
 │   │   ├── EMAForecaster.h        # Exponential Moving Average
-│   │   └── HoltForecaster.h       # Holt's trend-corrected forecaster
+│   │   ├── HoltForecaster.h       # Holt's trend-corrected forecaster
+│   │   ├── DemandSignal.h         # Real-time demand signal struct
+│   │   └── SignalAwareForecaster.h # Decorator: injects signals into any forecaster
 │   ├── loader/
 │   │   ├── CSVLoader.h            # Factory-style CSV ingestion
 │   │   └── JSONExporter.h         # Structured JSON report writer
@@ -69,17 +81,22 @@ supply-chain-analytics-engine/
 │       ├── EOQCalculator.h
 │       ├── InventoryPlanner.h
 │       ├── PlannerCache.h         # Thread-safe LRU cache
-│       ├── PlannerPipeline.h      # std::variant result/error pipeline
+│       ├── PlannerPipeline.h      # std::expected<T,E> result/error pipeline (C++23)
 │       ├── RiskScorer.h
 │       └── SafetyStockCalculator.h
 ├── src/
 │   ├── algorithms/
 │   │   ├── SMAForecaster.cpp
 │   │   ├── EMAForecaster.cpp
-│   │   └── HoltForecaster.cpp
+│   │   ├── HoltForecaster.cpp
+│   │   └── SignalAwareForecaster.cpp
 │   ├── loader/
 │   │   ├── CSVLoader.cpp
 │   │   └── JSONExporter.cpp
+│   ├── simulation/
+│   │   ├── SupplyChainSimulator.cpp
+│   │   ├── DisruptionAnalyzer.cpp
+│   │   └── ScenarioRunner.cpp
 │   └── planner/
 │       ├── BatchPlanner.cpp
 │       ├── EOQCalculator.cpp
@@ -93,10 +110,12 @@ supply-chain-analytics-engine/
 │   ├── test_cache.cpp             # LRU cache + BatchPlanner + thread safety
 │   ├── test_eoq.cpp
 │   ├── test_forecasters.cpp       # SMA + EMA
-│   ├── test_holt.cpp              # HoltForecaster + PlannerPipeline
+│   ├── test_holt.cpp              # HoltForecaster + PlannerPipeline (std::expected)
 │   ├── test_planner.cpp
 │   ├── test_risk_scorer.cpp
-│   └── test_safety_stock.cpp
+│   ├── test_safety_stock.cpp
+│   ├── test_signals.cpp           # SignalAwareForecaster
+│   └── test_simulation.cpp        # SupplyChainSimulator + DisruptionAnalyzer + ScenarioRunner
 ├── demo/
 │   ├── benchmark.cpp              # 50K item throughput benchmark
 │   └── main.cpp                   # Full CLI report + JSON export
@@ -125,6 +144,31 @@ auto forecast = algo->forecast(history, 3);
 ```
 
 New algorithms (e.g. Holt-Winters) can be added without touching existing code.
+
+### Decorator — signal-aware forecasting
+
+`SignalAwareForecaster` wraps any `IForecaster` and applies additive or
+multiplicative demand signals on top of the base forecast output:
+
+```cpp
+SignalAwareForecaster f(std::make_unique<HoltForecaster>(0.3, 0.2));
+f.add_signal({"POS",    +15.0, DemandSignal::Type::Additive,      "weekend spike"});
+f.add_signal({"MARKET",  1.10, DemandSignal::Type::Multiplicative, "competitor OOS"});
+auto adjusted = f.forecast(history, 3); // (base + 15) * 1.10
+```
+
+### std::expected — typed error pipeline (C++23)
+
+`PlannerPipeline::run()` returns `std::expected<PlanningResult, std::string>`.
+The caller never needs try/catch or null checks:
+
+```cpp
+auto r = pipeline.run(item, suppliers, shipments);
+if (r.has_value())
+    std::cout << to_string(r.value().risk_level);
+else
+    std::cerr << "Error: " << r.error();
+```
 
 ### Factory — stateless CSV loading
 
@@ -204,7 +248,7 @@ composite_score    = 0.6 × stockout_proximity + 0.4 × unreliability
 
 **Requirements:**
 - CMake 3.16+
-- C++17-compatible compiler (MSVC 2019+, GCC 9+, Clang 10+)
+- C++23-compatible compiler (MSVC 2022 17.3+, GCC 13+, Clang 17+)
 - Internet access at configure time (CMake fetches Google Test automatically)
 
 ```bash
@@ -212,7 +256,7 @@ cmake -S . -B build
 cmake --build build
 ```
 
-On Windows with Visual Studio:
+On Windows with Visual Studio 2022:
 ```powershell
 cmake -S . -B build -G "Visual Studio 17 2022"
 cmake --build build --config Release
@@ -280,9 +324,11 @@ Widget-A      0.214     Normal
 
 | Tool / Feature | Purpose |
 |---|---|
-| **C++17** | Core language: `std::optional`, `if`-init, structured bindings |
+| **C++23** | Core language standard: `std::expected`, `std::optional`, structured bindings |
+| **`std::expected<T,E>`** | Typed result/error without exceptions — `PlannerPipeline` |
+| **`std::async` / `std::future`** | Parallel batch planning and concurrent scenario evaluation |
 | **CMake 3.16+** | Cross-platform build system |
 | **Google Test 1.14** | Unit and parameterised testing (fetched via `FetchContent`) |
-| **`std::optional`** | Nullable shipment reference without raw pointers |
-| **Strategy pattern** | Swappable forecasting algorithms |
+| **Strategy pattern** | Swappable forecasting algorithms (`IForecaster`) |
+| **Decorator pattern** | `SignalAwareForecaster` wraps any forecaster with live demand signals |
 | **Rational approximation** | Portable inverse-normal CDF without external math libs |
