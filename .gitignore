@@ -1,0 +1,49 @@
+# Build output
+build/
+out/
+cmake-build-*/
+
+# Visual Studio
+.vs/
+*.vcxproj.user
+*.VC.db
+*.VC.opendb
+CMakeSettings.json
+
+# CMake generated
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# Compiled object files
+*.o
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Generated report
+report.json
+
+# License (not committed yet)
+LICENSE
+
+# macOS
+.DS_Store
+
+# CLion
+.idea/
+
+# VS Code
+.vscode/

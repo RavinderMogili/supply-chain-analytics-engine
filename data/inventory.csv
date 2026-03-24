@@ -1,0 +1,6 @@
+item_id,item_name,warehouse,current_stock,daily_demand,reorder_point,reorder_qty,supplier_id
+101,Widget-A,WH-East,120,10,70,100,S1
+102,Widget-B,WH-East,40,8,30,80,S2
+103,Widget-C,WH-West,200,25,90,150,S1
+104,Widget-D,WH-West,25,6,20,50,S3
+105,Widget-E,WH-East,18,5,15,40,S2

@@ -1,0 +1,4 @@
+supplier_id,supplier_name,lead_time_days,reliability_score,region
+S1,Alpha Components,7,92,Ontario
+S2,Delta Supply,12,80,Texas
+S3,Nova Industrial,5,95,Quebec
